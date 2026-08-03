@@ -5,20 +5,21 @@ Custom API Client for OGhidra
 Handles communication with OpenAI-compatible APIs (GPT-5, custom endpoints, etc.).
 """
 
+import email.utils
 import json
 import logging
-import requests
+import random
+import threading
 import time
 import uuid
 import warnings
-import threading
-import email.utils
-import random
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Tuple
-from tenacity import Retrying, stop_after_attempt, wait_exponential, retry_if_exception
+from typing import Any
+
+import requests
 import urllib3
+from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
 # Suppress SSL warnings when verification is disabled
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -162,7 +163,7 @@ class CustomAPIClient:
 
         self.logger.info(f"Custom API LLM logging initialized. Log file: {self.llm_log_file}")
 
-    def _log_llm_interaction(self, interaction_type: str, data: Dict[str, Any]):
+    def _log_llm_interaction(self, interaction_type: str, data: dict[str, Any]):
         """Log LLM interaction to dedicated log file."""
         if not self.llm_logging_enabled or not self.llm_logger:
             return
@@ -178,7 +179,7 @@ class CustomAPIClient:
                 lines.append(f"{key}: {value}")
             self.llm_logger.info("\n".join(lines))
 
-    def _emit_ui_event(self, event_type: str, payload: Dict[str, Any]) -> None:
+    def _emit_ui_event(self, event_type: str, payload: dict[str, Any]) -> None:
         cb = self._ui_event_callback
         if not cb:
             return
@@ -282,7 +283,7 @@ class CustomAPIClient:
         except Exception:
             return 0.0
 
-    def _make_before_sleep(self, interaction_type: str, request_id: str, model: str, phase: Optional[str]):
+    def _make_before_sleep(self, interaction_type: str, request_id: str, model: str, phase: str | None):
         """Create a tenacity before_sleep callback that logs retries and adapts throttle."""
 
         def before_sleep(retry_state):
@@ -367,12 +368,12 @@ class CustomAPIClient:
 
         return before_sleep
 
-    def query(self, prompt: Union[str, Tuple[str, str]], phase: Optional[str] = None) -> str:
+    def query(self, prompt: str | tuple[str, str], phase: str | None = None) -> str:
         """
         High-level query interface compatible with Bridge.
         Handles both string prompts and (system, user) tuples.
         """
-        system_prompt: Optional[str] = None
+        system_prompt: str | None = None
         user_prompt: str
 
         if isinstance(prompt, tuple) and len(prompt) == 2:
@@ -385,11 +386,11 @@ class CustomAPIClient:
     def generate(
         self,
         prompt: str,
-        model: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        phase: Optional[str] = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        phase: str | None = None,
     ) -> str:
         """
         Generate a response from the Custom API.
@@ -591,14 +592,14 @@ class CustomAPIClient:
             except Exception:
                 pass
 
-    def generate_with_phase(self, prompt: str, phase: Optional[str] = None, system_prompt: Optional[str] = None) -> str:
+    def generate_with_phase(self, prompt: str, phase: str | None = None, system_prompt: str | None = None) -> str:
         """Generate using phase-specific model configuration."""
         model_override = self.model_map.get(phase) if phase else None
         if model_override:
             return self.generate(prompt=prompt, model=model_override, system_prompt=system_prompt, phase=phase)
         return self.generate(prompt=prompt, system_prompt=system_prompt, phase=phase)
 
-    def embed(self, text: str, model: Optional[str] = None) -> List[float]:
+    def embed(self, text: str, model: str | None = None) -> list[float]:
         """
         Generate embeddings using Custom API (OpenAI-compatible).
         Supports text-embedding-ada-002 and similar models.
